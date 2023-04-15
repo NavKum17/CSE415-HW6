@@ -106,17 +106,25 @@ void parallelMatrixConversion()
 
 void parallelCSC_SpMV(float *x, float *b)
 {
-    int i, j;
-    omp_set_num_threads(40);
-    #pragma omp parallel for private(i,j) shared (x, b, colptrs, irem, xrem)
+    int i, j, k;
+    float *temp = (float *)calloc(numrows, sizeof(float));
+    #pragma omp parallel for private(i,j,k) shared (x, b, temp, colptrs, irem, xrem)
+    
     for(i = 0; i < numcols; i++)
     {
         for(j = colptrs[i] - 1; j < colptrs[i+1] - 1; j++)
         {
-	    #pragma omp atomic
-            b[irem[j] - 1] += xrem[j]*x[i];
+            temp[irem[j] - 1] += xrem[j]*x[i];
         }
     }
+	
+    #pragma omp parallel for shared(b, temp)
+    for(k=0; k<numrows; k++)
+    {
+	#pragma omp atomic
+	b[k] += temp[k];
+    }
+    free(temp);
 }
 
 void parallelCSB_SpMV(float *x, float *b)
