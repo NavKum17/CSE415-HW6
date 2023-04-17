@@ -1,5 +1,7 @@
 #include "parallelSpMV.h"
 
+int t = 1;
+
 void parallelMatrixConversion()
 {
     int i, r, c, k, k1, k2, blkr, blkc;
@@ -19,7 +21,7 @@ void parallelMatrixConversion()
         top[i] = (int *)malloc(ncolblks * sizeof(int));
 
     //initialization
-    #pragma omp parallel for shared(parMatrixBlock, top) private(blkr, blkc)
+    #pragma omp parallel for num_threads(t) shared(parMatrixBlock, top) private(blkr, blkc)
     for(blkr = 0 ; blkr < nrowblks ; blkr++)
     {
         for(blkc = 0 ; blkc < ncolblks ; blkc++)
@@ -29,7 +31,7 @@ void parallelMatrixConversion()
         }
     }
     //calculating nnz per block
-    #pragma omp parallel for shared(parMatrixBlock) private(c, k)
+    #pragma omp parallel for num_threads(t) shared(parMatrixBlock) private(c, k)
     for(c = 0 ; c < numcols ; c++)
     {
         k1 = colptrs[c];
@@ -44,7 +46,7 @@ void parallelMatrixConversion()
     }
 
     //allocating memory based on nonzero counts of each block
-    #pragma omp parallel for shared(parMatrixBlock, block_width, ncolblks) private(blkr, blkc)
+    #pragma omp parallel for num_threads(t) shared(parMatrixBlock, block_width, ncolblks) private(blkr, blkc)
     for(blkr = 0 ; blkr < nrowblks ; blkr++)
     {
         for(blkc = 0 ; blkc < ncolblks ; blkc++)
@@ -67,7 +69,7 @@ void parallelMatrixConversion()
     }
 
     //assigning each nonzero on CSC matrix to its corresponding position on CSB matrix
-    #pragma omp parallel for shared(parMatrixBlock, irem, xrem, colptrs, ncolblks, top, numcols) private(k1, k, k2, blkc, blkr, r, c)
+    #pragma omp parallel for num_threads(t) shared(parMatrixBlock, irem, xrem, colptrs, ncolblks, top, numcols) private(k1, k, k2, blkc, blkr, r, c)
     for(c = 0 ; c < numcols ; c++)
     {
         k1 = colptrs[c];
@@ -111,7 +113,7 @@ void parallelMatrixConversion()
 void parallelCSC_SpMV(float *x, float *b)
 {
     int i, j;
-    #pragma omp parallel for private(i,j) shared(x, b, colptrs, irem, xrem)   
+    #pragma omp parallel for num_threads(t) private(i,j) shared(x, b, colptrs, irem, xrem)   
     for(i = 0; i < numcols; i++)
     {
         for(j = colptrs[i] - 1; j < colptrs[i+1] - 1; j++)
@@ -125,7 +127,7 @@ void parallelCSB_SpMV(float *x, float *b)
 {
     int i, j, k;
     parblock blk;
-    #pragma omp parallel for private(i,j,k,blk) shared(x,b,parMatrixBlock,nrowblks,ncolblks)
+    #pragma omp parallel for num_threads(t) private(i,j,k,blk) shared(x,b,parMatrixBlock,nrowblks,ncolblks)
     for(i = 0; i < nrowblks; i++)
     {
         for(j = 0; j < ncolblks; j++)
