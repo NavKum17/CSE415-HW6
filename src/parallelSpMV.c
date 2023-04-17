@@ -19,6 +19,7 @@ void parallelMatrixConversion()
         top[i] = (int *)malloc(ncolblks * sizeof(int));
 
     //initialization
+    #pragma omp parallel for shared(parMatrixBlock, top) private(blkr, blkc)
     for(blkr = 0 ; blkr < nrowblks ; blkr++)
     {
         for(blkc = 0 ; blkc < ncolblks ; blkc++)
@@ -28,6 +29,7 @@ void parallelMatrixConversion()
         }
     }
     //calculating nnz per block
+    #pragma omp parallel for shared(parMatrixBlock) private(c, k)
     for(c = 0 ; c < numcols ; c++)
     {
         k1 = colptrs[c];
@@ -42,6 +44,7 @@ void parallelMatrixConversion()
     }
 
     //allocating memory based on nonzero counts of each block
+    #pragma omp parallel for shared(parMatrixBlock, block_width, ncolblks) private(blkr, blkc)
     for(blkr = 0 ; blkr < nrowblks ; blkr++)
     {
         for(blkc = 0 ; blkc < ncolblks ; blkc++)
@@ -64,6 +67,7 @@ void parallelMatrixConversion()
     }
 
     //assigning each nonzero on CSC matrix to its corresponding position on CSB matrix
+    #pragma omp parallel for shared(parMatrixBlock, irem, xrem, colptrs, ncolblks, top, numcols) private(k1, k, k2, blkc, blkr, r, c)
     for(c = 0 ; c < numcols ; c++)
     {
         k1 = colptrs[c];
