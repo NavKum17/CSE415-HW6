@@ -1,3 +1,4 @@
+#SBATCH --mem=300G
 CC := gcc
 
 CFLAGS := -std=gnu99 -Wall -Wextra -Wpedantic -Wunused-parameter -O3 -fopenmp

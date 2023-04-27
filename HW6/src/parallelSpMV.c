@@ -1,6 +1,6 @@
 #include "parallelSpMV.h"
 
-int t = 1;
+int t = 40;
 
 void parallelMatrixConversion()
 {
