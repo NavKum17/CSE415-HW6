@@ -26,7 +26,7 @@ double p2p_reduce(double a, double b, int n, int my_rank, int comm_sz)
 {
     int local_n, source;
     double h, local_a, local_b;
-    double local_int, total_int;
+    double local_sum, global_sum;
 
     // h will be the same for all processes 
 
@@ -36,7 +36,26 @@ double p2p_reduce(double a, double b, int n, int my_rank, int comm_sz)
     // aggregate the partial results at the root (MPI rank = 0) process
     // using point-to-point communication primitives, i.e. MPI_Send and MPI_Recvs
 
-    return total_int;
+    h = (b - a) / n;
+    local_a = a + my_rank * (b - a) / comm_sz;
+    local_b = local_a + (b - a) / comm_sz;
+    local_n = n / comm_sz;
+   
+    local_sum = Trap(local_a, local_b, local_n, h); 
+    
+    global_sum = 0.0;
+    if (my_rank == 0) {
+        global_sum += local_sum;
+        for (int i = 1; i < comm_sz; i++) {
+            double temp;
+            MPI_Recv(&temp, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            global_sum += temp;
+        }
+    } else {
+        MPI_Send(&local_sum, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
+    }
+
+    return global_sum;
 }
 
 
