@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <limits.h>
 #include <mpi.h>
 
 #define ROTL32(x,y) ((x<<y)|(x>>(32-y)))
@@ -184,24 +185,28 @@ void decrypt8(unsigned char *inp, unsigned key, unsigned char *decoded, unsigned
 
 }
 
+int main(int argc, char * argv[]) {
+  char outfilename[100];
+  unsigned char encrypted[1000], decrypted[1000], dcopy[1000];
+  FILE * fin, * fout;
+  int success = 0;
+  unsigned i, len;
+  double tstart, tend;
 
-int main(int argc,char *argv[])
-{
-    char a;
-    char outfilename[100];
-    unsigned char encrypted[1000], decrypted[1000], dcopy[1000];
-    FILE *fin, *fout;
-    int success = 0;
-    unsigned i, len;
-    double tstart, tend;
+  MPI_Init( & argc, & argv);
 
+  int world_size, world_rank;
+  MPI_Comm_size(MPI_COMM_WORLD, & world_size);
+  MPI_Comm_rank(MPI_COMM_WORLD, & world_rank);
+
+  if (world_rank == 0) {
     printf("\n\nx0r 32-bit code breaker\n\n");
 
     if (argc == 1) {
-        fprintf(stderr, "ERROR: No file(s) supplied.\n");
-        fprintf(stderr, "USAGE: This program requires a filename \
-                to be provided as argument!");
-        exit(1);
+      fprintf(stderr, "ERROR: No file(s) supplied.\n");
+      fprintf(stderr, "USAGE: This program requires a filename \
+                    to be provided as argument!");
+      exit(1);
     }
 
     printf("decrypting file %s by trying all possible keys...\n", argv[1]);
@@ -209,46 +214,67 @@ int main(int argc,char *argv[])
     printf("Status:\n");
 
     if ((fin = fopen(argv[1], "rb")) == NULL) {
-        fprintf(stderr, "ERROR: Could not open: %s\n", argv[1]);
-        exit(1);
+      fprintf(stderr, "ERROR: Could not open: %s\n", argv[1]);
+      exit(1);
     }
 
     fseek(fin, 0, SEEK_END);
     len = ftell(fin);
     fseek(fin, 0, SEEK_SET);
     fread(encrypted, len, 1, fin);
-    printf("[LOG] %u encrypted bytes read.\n", len); 
+    printf("[LOG] %u encrypted bytes read.\n", len);
     fclose(fin);
+  }
 
-    //  printf("encrypted: "); 
-    //  for (i=0; i<end; ++i)
-    //    printf("[%d]: %c", i, encrypted[i]); 
+  MPI_Bcast( & len, 1, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
+  MPI_Bcast(encrypted, len, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
 
-    tstart = MPI_Wtime();
-    for (i=0; i<(unsigned)pow(2.0,(double)sizeof(int)*8); ++i) {
-        decrypt32(encrypted, i, decrypted, len);
-        //    printf("i=%d - decrypted: %s\n", i, decrypted); 
+  tstart = MPI_Wtime();
+  unsigned range = (unsigned) pow(2.0, (double) sizeof(int) * 8) / world_size;
+  unsigned start_key = world_rank * range;
+  unsigned end_key = (world_rank + 1) * range;
 
-        memcpy(dcopy, decrypted, len * sizeof(unsigned char));
+  for (i = start_key; i < end_key; ++i) {
+    decrypt32(encrypted, i, decrypted, len);
+    memcpy(dcopy, decrypted, len * sizeof(unsigned char));
 
-        if (isValid(dcopy, len)) {
-            success = 1;
-            break;
-        } 
+    if (isValid(dcopy, len)) {
+      success = 1;
+      break;
     }
-    tend = MPI_Wtime();
+  }
+
+  int global_success = 0;
+  unsigned found_key = 0;
+  MPI_Allreduce( & success, & global_success, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
+
+  if (global_success) {
+    if (success) {
+      found_key = i;
+    }
+
+    MPI_Reduce( & found_key, & i, 1, MPI_UNSIGNED, MPI_MAX, 0, MPI_COMM_WORLD);
+  }
+
+  tend = MPI_Wtime();
+
+  if (world_rank == 0) {
     printf("\nTime elapsed: %.6f seconds\n", tend - tstart);
 
-    if (success) {
-        sprintf(outfilename, "%s.out", argv[1]);
-        fout = fopen(outfilename, "w");
-        fprintf(fout, "%s", decrypted); 
-        printf("\nFile decrypted successfully using key %u\n", i);
-        printf("See the file %s\n\n\n", outfilename);
-        fclose(fout);
-        return 0;
+    if (global_success) {
+      sprintf(outfilename, "%s.out", argv[1]);
+      fout = fopen(outfilename, "w");
+      fprintf(fout, "%s", decrypted);
+      printf("\nFile decrypted successfully using key %u\n", i);
+      printf("See the file %s\n\n\n", outfilename);
+      fclose(fout);
+      MPI_Finalize();
+      return 0;
     }
 
     printf("\nWARNING: File could not be decrypted.\n\n\n");
-    return 1;
+  }
+
+  MPI_Finalize();
+  return 1;
 }
